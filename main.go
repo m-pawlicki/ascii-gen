@@ -6,10 +6,21 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-	"io"
 	"log"
+	"math"
 	"os"
 )
+
+func get_brightness(r int, g int, b int) int {
+	dr := float64(r) / 256
+	dg := float64(g) / 256
+	db := float64(b) / 256
+	red := 0.299 * dr * dr
+	green := 0.587 * dg * dg
+	blue := 0.114 * db * db
+	bright := math.Sqrt(red + green + blue)
+	return int(bright) >> 8
+}
 
 func main() {
 
@@ -24,17 +35,17 @@ func main() {
 	}
 	defer reader.Close()
 
-	// Decode image dimensions and format
-	cfg, format, err := image.DecodeConfig(reader)
-	if err != nil {
-		log.Fatal(err)
-	}
+	/* 	// Decode image dimensions and format
+	   	cfg, format, err := image.DecodeConfig(reader)
+	   	if err != nil {
+	   		log.Fatal(err)
+	   	}
 
-	// Rewind to start of file
-	_, err = reader.Seek(0, io.SeekStart)
-	if err != nil {
-		log.Fatal(err)
-	}
+	   	// Rewind to start of file
+	   	_, err = reader.Seek(0, io.SeekStart)
+	   	if err != nil {
+	   		log.Fatal(err)
+	   	} */
 
 	// Decode image data
 	img, _, err := image.Decode(reader)
@@ -43,24 +54,31 @@ func main() {
 	}
 	bounds := img.Bounds()
 
-	fmt.Println("Width:", cfg.Width, "Height:", cfg.Height, "Format:", format)
+	img_width := bounds.Max.X
+	img_height := bounds.Max.Y
 
-	var histogram [16][4]int
+	fmt.Printf("Width: %d Height: %d", img_width, img_height)
+
+	brightness_map := make([][]int, img_width)
+	for i := range brightness_map {
+		brightness_map[i] = make([]int, img_height)
+	}
+
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			r, g, b, a := img.At(x, y).RGBA()
-			// A color's RGBA method returns values in the range [0, 65535].
-			// Shifting by 12 reduces this to the range [0, 15].
-			histogram[r>>12][0]++
-			histogram[g>>12][1]++
-			histogram[b>>12][2]++
-			histogram[a>>12][3]++
+			r, g, b, _ := img.At(x, y).RGBA()
+			red := int(r << 8)
+			green := int(g << 8)
+			blue := int(b << 8)
+			brightness := get_brightness(red, green, blue)
+			brightness_map[x][y] = brightness
 		}
 	}
 
-	// Print the results.
-	fmt.Printf("%-14s %6s %6s %6s %6s\n", "bin", "red", "green", "blue", "alpha")
-	for i, x := range histogram {
-		fmt.Printf("0x%04x-0x%04x: %6d %6d %6d %6d\n", i<<12, (i+1)<<12-1, x[0], x[1], x[2], x[3])
+	for i := range brightness_map {
+		for j := range brightness_map[i] {
+			fmt.Printf("Brightness at (%d, %d): %d\n", i, j, brightness_map[i][j])
+		}
 	}
+
 }
